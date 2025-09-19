@@ -2,4 +2,5 @@ streamlit
 faiss-cpu
 openai
 numpy
-pickle5
+
+
