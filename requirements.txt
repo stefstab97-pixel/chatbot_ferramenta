@@ -1,6 +1,7 @@
-streamlit
-faiss-cpu
-openai
-numpy
-
+streamlit==1.38.0
+faiss-cpu==1.7.4
+openai==1.43.0
+numpy==1.26.4
+pandas==2.2.2
+pickle5==0.0.11
 
