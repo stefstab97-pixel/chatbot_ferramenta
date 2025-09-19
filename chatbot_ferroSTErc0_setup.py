@@ -14,11 +14,10 @@ if api_key is None:
 client = OpenAI(api_key=api_key)
 
 # -----------------------------
-# 2️⃣ Percorso assoluto dei file
+# 2️⃣ Percorso relativo dei file (compatibile con Streamlit Cloud e locale)
 # -----------------------------
-cartella = r"C:\Users\stabl\OneDrive\Desktop\chatbot_ferroSTErc0"
-faiss_index_path = os.path.join(cartella, "prodotti_index.faiss")
-texts_path = os.path.join(cartella, "prodotti_texts.pkl")
+faiss_index_path = "prodotti_index.faiss"
+texts_path = "prodotti_texts.pkl"
 
 # -----------------------------
 # 3️⃣ Caricamento FAISS e testi prodotti
@@ -49,13 +48,10 @@ def cerca_prodotti(query, k=3):
 # 5️⃣ Few-shot examples
 # -----------------------------
 few_shot = [
-    # Ferramenta
     {"user": "Voglio un trapano", 
      "assistant": "Ti consiglio un avvitatore XYZ, perfetto per legno, Marca ABC, Prezzo: 39.99"},
     {"user": "Mi serve una chiave inglese", 
      "assistant": "Ti suggerisco la chiave inglese LMN, regolabile da 8 a 24 mm, Marca OPQ, Prezzo: 12.50"},
-    
-    # Cancelleria
     {"user": "Ho bisogno di etichette adesive", 
      "assistant": "Ti consiglio le etichette adesive Navigator, confezione da 25 pezzi, Prezzo: 27.71€, made in Spagna, codice 602EF"},
     {"user": "Mi serve un evidenziatore giallo", 
