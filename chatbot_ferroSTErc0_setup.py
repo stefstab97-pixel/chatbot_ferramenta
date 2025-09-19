@@ -1,109 +1,124 @@
 import streamlit as st
-import os
-import faiss
 import pickle
+import faiss
 import numpy as np
 from openai import OpenAI
+import os
+from dotenv import load_dotenv
 
 # -----------------------------
-# 1️⃣ API Key OpenAI sicura
+# 1️⃣ Carica API Key OpenAI
 # -----------------------------
+load_dotenv()
 api_key = os.environ.get("OPENAI_API_KEY")
-if api_key is None:
-    raise ValueError("API Key non trovata! Imposta la variabile OPENAI_API_KEY.")
 client = OpenAI(api_key=api_key)
 
 # -----------------------------
-# 2️⃣ Percorso relativo dei file (compatibile con Streamlit Cloud e locale)
+# 2️⃣ Carica Vector Store FAISS e testi
 # -----------------------------
-faiss_index_path = "prodotti_index.faiss"
-texts_path = "prodotti_texts.pkl"
+cartella = "C:/Users/stabl/OneDrive/Desktop/vector_store"
+faiss_index = faiss.read_index(os.path.join(cartella, "prodotti_index.faiss"))
 
-# -----------------------------
-# 3️⃣ Caricamento FAISS e testi prodotti
-# -----------------------------
-faiss_index = faiss.read_index(faiss_index_path)
-
-with open(texts_path, "rb") as f:
+with open(os.path.join(cartella, "prodotti_texts.pkl"), "rb") as f:
     prodotti_texts = pickle.load(f)
 
 # -----------------------------
-# 4️⃣ Funzione ricerca semantica
+# 3️⃣ Funzione di ricerca semantica
 # -----------------------------
 def cerca_prodotti(query, k=3):
-    """
-    Restituisce i primi k prodotti più simili semanticamente alla query.
-    """
     query_emb = client.embeddings.create(
         model="text-embedding-3-small",
         input=query
     ).data[0].embedding
-    
-    query_emb_array = np.array(query_emb, dtype='float32').reshape(1, -1)
-    D, I = faiss_index.search(query_emb_array, k)
-    
-    return [prodotti_texts[i] for i in I[0]]
+    D, I = faiss_index.search(np.array([query_emb]).astype('float32'), k)
+    risultati = [prodotti_texts[i] for i in I[0]]
+    return risultati
 
 # -----------------------------
-# 5️⃣ Few-shot examples
+# 4️⃣ Few-shot examples
 # -----------------------------
 few_shot = [
-    {"user": "Voglio un trapano", 
-     "assistant": "Ti consiglio un avvitatore XYZ, perfetto per legno, Marca ABC, Prezzo: 39.99"},
-    {"user": "Mi serve una chiave inglese", 
-     "assistant": "Ti suggerisco la chiave inglese LMN, regolabile da 8 a 24 mm, Marca OPQ, Prezzo: 12.50"},
     {"user": "Ho bisogno di etichette adesive", 
-     "assistant": "Ti consiglio le etichette adesive Navigator, confezione da 25 pezzi, Prezzo: 27.71€, made in Spagna, codice 602EF"},
+     "assistant": "Etichette adesive Navigator, confezione da 25 pezzi, Prezzo: 27.71€, made in Spagna, codice 602EF"},
+    
     {"user": "Mi serve un evidenziatore giallo", 
-     "assistant": "Ti suggerisco l'evidenziatore giallo Pilot, confezione da 50 pezzi, Prezzo: 19.35€, provenienza UK, codice 715EF"},
+     "assistant": "Evidenziatore giallo Pilot, confezione da 50 pezzi, Prezzo: 19.35€, provenienza UK, codice 715EF"},
+    
     {"user": "Vorrei dei gessetti colorati", 
-     "assistant": "Ti consiglio i gessetti colorati Navigator, confezione da 20 pezzi, Prezzo: 617.00€, provenienza Germania, codice 204CD"},
+     "assistant": "Gessetti colorati Navigator, confezione da 20 pezzi, Prezzo: 617.00€, provenienza Germania, codice 204CD"},
+    
     {"user": "Cerco cartucce per stampante", 
-     "assistant": "Ti suggerisco le cartucce per stampante Navigator, confezione da 100 pezzi, Prezzo: 37.54€, provenienza Cina, codice 152MN"}
+     "assistant": "Cartucce per stampante Navigator, confezione da 100 pezzi, Prezzo: 37.54€, provenienza Cina, codice 152MN"}
 ]
 
 # -----------------------------
-# 6️⃣ Streamlit Chatbot UI
+# 5️⃣ Streamlit UI migliorata
 # -----------------------------
+st.set_page_config(
+    page_title="🛠️ Chatbot Ferramenta & Cancelleria",
+    page_icon="🛒",
+    layout="wide"
+)
+
 st.title("🛠️ Chatbot Ferramenta & Cancelleria")
+st.markdown("""
+Benvenuto! Scrivi la tua richiesta e ti suggerirò i prodotti più adatti.
+Puoi anche selezionare una **categoria** per affinare i risultati.
+""")
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# Selezione categoria
+categorie = ["Tutti", "Cancelleria", "Ferramenta", "Cartucce e Stampanti", "Altro"]
+categoria = st.selectbox("Seleziona categoria:", categorie)
 
-# Input utente
+# Input dell'utente
 user_input = st.text_input("Scrivi la tua richiesta:")
 
-if user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
+# Pulsante invio
+if st.button("Cerca prodotto") and user_input:
+    st.info("⏳ Sto cercando i prodotti più adatti...")
+
+    # -----------------------------
+    # 6️⃣ Ricerca prodotti
+    # -----------------------------
+    risultati = cerca_prodotti(user_input)
     
-    # Ricerca prodotti più simili
-    prodotti_risultati = cerca_prodotti(user_input)
+    # Filtra in base alla categoria selezionata (semplice matching su testo)
+    if categoria != "Tutti":
+        risultati = [r for r in risultati if categoria.lower() in r.lower()]
     
-    # Few-shot + query utente
+    # -----------------------------
+    # 7️⃣ Costruzione prompt few-shot
+    # -----------------------------
     prompt = "Sei un assistente vendita di ferramenta e cancelleria. Rispondi consigliando il prodotto più adatto.\n"
     for ex in few_shot:
         prompt += f"Utente: {ex['user']}\nAssistente: {ex['assistant']}\n"
     prompt += f"Utente: {user_input}\nAssistente:"
 
-    # Chiamata modello OpenAI
+    # -----------------------------
+    # 8️⃣ Chiamata modello OpenAI
+    # -----------------------------
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3
     )
-    
-    assistant_reply = response.choices[0].message.content
-    st.session_state.messages.append({"role": "assistant", "content": assistant_reply})
 
-# Mostra chat
-for msg in st.session_state.messages:
-    if msg["role"] == "user":
-        st.markdown(f"**Tu:** {msg['content']}")
+    # -----------------------------
+    # 9️⃣ Visualizzazione risultati UI/UX
+    # -----------------------------
+    st.subheader("💡 Prodotti consigliati dal vector store:")
+    if risultati:
+        for i, r in enumerate(risultati, 1):
+            st.success(f"{i}. {r}")
     else:
-        st.markdown(f"**Assistente:** {msg['content']}")
+        st.warning("Nessun prodotto trovato per la categoria selezionata.")
 
-# Mostra prodotti trovati dal database
-if user_input:
-    st.subheader("💡 Prodotti consigliati dal database:")
-    for i, r in enumerate(prodotti_risultati, 1):
-        st.write(f"{i}. {r}")
+    st.subheader("📝 Risposta generata dal modello:")
+    st.write(response.choices[0].message.content)
+
+    # Pulsante per info aggiuntive
+    if st.button("Mostra informazioni aggiuntive"):
+        st.info("ℹ️ Qui puoi aggiungere dettagli come disponibilità in magazzino, alternative o specifiche tecniche.")
+        # Esempio di informazioni aggiuntive
+        for i, r in enumerate(risultati, 1):
+            st.write(f"✅ {r} - Disponibilità: In stock, Sconto attuale: 5%")
