@@ -7,7 +7,6 @@ import os
 from dotenv import load_dotenv
 import gdown
 
-
 # -----------------------------
 # Funzione per scaricare file da Google Drive usando gdown
 # -----------------------------
@@ -17,7 +16,6 @@ def scarica_file_gdrive(file_id, percorso_locale):
         st.info(f"Scarico {percorso_locale} da Google Drive...")
         gdown.download(url, percorso_locale, quiet=False)
         st.success("Download completato.")
-
 
 # -----------------------------
 # 1️⃣ Carica API Key OpenAI
@@ -64,7 +62,6 @@ def cerca_prodotti(query, k=3):
     risultati = [prodotti_texts[i] for i in I[0]]
     return risultati
 
-
 # -----------------------------
 # 4️⃣ Few-shot examples
 # -----------------------------
@@ -82,9 +79,8 @@ few_shot = [
      "assistant": "Cartucce per stampante Navigator, confezione da 100 pezzi, Prezzo: 37.54€, provenienza Cina, codice 152MN"}
 ]
 
-
 # -----------------------------
-# 5️⃣ Streamlit UI
+# 5️⃣ Setup interfaccia e session state per storia e feedback
 # -----------------------------
 st.set_page_config(
     page_title="🛠️ Chatbot Ferramenta & Cancelleria",
@@ -95,53 +91,100 @@ st.set_page_config(
 st.title("🛠️ Chatbot Ferramenta & Cancelleria")
 st.markdown("""
 Benvenuto! Scrivi la tua richiesta e ti suggerirò i prodotti più adatti.
-Puoi anche selezionare una **categoria** per affinare i risultati.
+Puoi anche selezionare una **categoria** e una **fascia prezzo** per affinare i risultati.
 """)
 
-categorie = ["Tutti", "Cancelleria", "Ferramenta", "Cartucce e Stampanti", "Altro"]
-categoria = st.selectbox("Seleziona categoria:", categorie)
-
-user_input = st.text_input("Scrivi la tua richiesta:")
-
+# Stato mantenuto per storia chat e feedback
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 if "show_info" not in st.session_state:
     st.session_state.show_info = False
+if "last_feedback" not in st.session_state:
+    st.session_state.last_feedback = None
 
-if st.button("Cerca prodotto") and user_input:
+# Filtri
+categorie = ["Tutti", "Cancelleria", "Ferramenta", "Cartucce e Stampanti", "Altro"]
+categoria = st.selectbox("Seleziona categoria:", categorie)
+fascia_prezzo = st.slider("Seleziona fascia prezzo (€):", 0, 1000, (0, 500))
+
+# Input multilinea con invio
+user_input = st.text_area("Scrivi la tua richiesta:", height=70, placeholder="Scrivi qui... (Premi Invio per inviare)")
+
+# Pulsanti esempi few-shot come scelta rapida
+with st.expander("Esempi rapidi"):
+    cols = st.columns(len(few_shot))
+    for i, ex in enumerate(few_shot):
+        if cols[i].button(ex["user"]):
+            user_input = ex["user"]
+            st.experimental_rerun()
+
+# Funzione per aggiungere messaggio alla chat
+def add_message(role, message):
+    st.session_state.chat_history.append({"role": role, "message": message})
+
+# Funzione per mostrare messaggi con stile diverso
+def display_chat():
+    for chat in st.session_state.chat_history:
+        if chat["role"] == "user":
+            st.markdown(f"<div style='background:#DCF8C6; padding:10px; border-radius:10px; margin:5px; max-width:70%; align-self:flex-end;'>{chat['message']}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div style='background:#F1F0F0; padding:10px; border-radius:10px; margin:5px; max-width:70%; align-self:flex-start;'>{chat['message']}</div>", unsafe_allow_html=True)
+
+# Invia richiesta se tasto premuto
+if st.button("Cerca prodotto") and user_input.strip():
+    add_message("user", user_input.strip())
     st.info("⏳ Sto cercando i prodotti più adatti...")
 
-    risultati = cerca_prodotti(user_input)
-    
+    risultati = cerca_prodotti(user_input.strip())
+
+    # Filtro categoria e fascia prezzo (semplificato filtro prezzo testuale)
     if categoria != "Tutti":
         risultati = [r for r in risultati if categoria.lower() in r.lower()]
+    risultati = [r for r in risultati if any(str(p) in r for p in range(fascia_prezzo[0], fascia_prezzo[1]+1))]
 
     prompt = "Sei un assistente vendita di ferramenta e cancelleria. Rispondi consigliando il prodotto più adatto.\n"
     for ex in few_shot:
         prompt += f"Utente: {ex['user']}\nAssistente: {ex['assistant']}\n"
-    prompt += f"Utente: {user_input}\nAssistente:"
+    prompt += f"Utente: {user_input.strip()}\nAssistente:"
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3
-    )
+    with st.spinner("Elaborazione del modello AI in corso..."):
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
 
-    st.subheader("💡 Prodotti consigliati dal vector store:")
+    # Messaggi prodotti dal vector store
+    prodotti_msg = ""
     if risultati:
-        for i, r in enumerate(risultati, 1):
-            st.success(f"{i}. {r}")
+        prodotti_msg = "\n".join([f"{i+1}. {r}" for i, r in enumerate(risultati)])
     else:
-        st.warning("Nessun prodotto trovato per la categoria selezionata.")
+        prodotti_msg = "Nessun prodotto trovato per la categoria e fascia prezzo selezionate."
 
-    st.subheader("📝 Risposta generata dal modello:")
-    st.write(response.choices[0].message.content)
-
-    st.session_state.ultimi_risultati = risultati
+    add_message("assistant", f"Prodotti consigliati:\n{prodotti_msg}\n\nRisposta modello:\n{response.choices[0].message.content}")
     st.session_state.show_info = False
+    st.session_state.last_feedback = None
 
+# Mostra la chat
+display_chat()
+
+# Pulsanti feedback se l’ultimo messaggio è dell’assistente
+if st.session_state.chat_history and st.session_state.chat_history[-1]["role"] == "assistant":
+    st.write("La risposta ti è stata utile?")
+    col1, col2 = st.columns(2)
+    if col1.button("Sì"):
+        st.session_state.last_feedback = True
+        st.success("Grazie per il feedback positivo!")
+    if col2.button("No"):
+        st.session_state.last_feedback = False
+        st.warning("Grazie per il feedback, lavoreremo per migliorare.")
+
+# Mostra informazioni aggiuntive opzionali
 if st.button("Mostra informazioni aggiuntive"):
     st.session_state.show_info = True
 
-if st.session_state.show_info and "ultimi_risultati" in st.session_state:
+if st.session_state.show_info and "chat_history" in st.session_state:
     st.info("ℹ️ Qui puoi aggiungere dettagli come disponibilità in magazzino, alternative o specifiche tecniche.")
-    for i, r in enumerate(st.session_state.ultimi_risultati, 1):
-        st.write(f"✅ {r} - Disponibilità: In stock, Sconto attuale: 5%")
+    if "ultimi_risultati" in st.session_state:
+        for i, r in enumerate(st.session_state.ultimi_risultati, 1):
+            st.write(f"✅ {r} - Disponibilità: In stock, Sconto attuale: 5%")
