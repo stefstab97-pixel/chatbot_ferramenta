@@ -5,22 +5,19 @@ import numpy as np
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
-import requests
+import gdown
+
 
 # -----------------------------
-# Funzione per scaricare file se manca
+# Funzione per scaricare file da Google Drive usando gdown
 # -----------------------------
-def scarica_file(url, percorso_locale):
+def scarica_file_gdrive(file_id, percorso_locale):
     if not os.path.exists(percorso_locale):
-        st.info(f"Scarico {percorso_locale} da {url}...")
-        response = requests.get(url)
-        if response.status_code == 200:
-            with open(percorso_locale, "wb") as f:
-                f.write(response.content)
-            st.success("Download completato.")
-        else:
-            st.error(f"Errore nel download: {response.status_code}")
-            st.stop()
+        url = f"https://drive.google.com/uc?id={file_id}"
+        st.info(f"Scarico {percorso_locale} da Google Drive...")
+        gdown.download(url, percorso_locale, quiet=False)
+        st.success("Download completato.")
+
 
 # -----------------------------
 # 1️⃣ Carica API Key OpenAI
@@ -41,15 +38,14 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 cartella = os.path.join(BASE_DIR, "vector_store")
 os.makedirs(cartella, exist_ok=True)
 
-# Link diretti di download Google Drive
-url_faiss = "https://drive.google.com/uc?export=download&id=16zQqSip_8yjAG4UZmJuqUujHcLuckvhi"
-url_texts = "https://drive.google.com/uc?export=download&id=1RmKCSe0CtT3zIvhS9dWfqcFMD-56v7Dv"
+id_faiss = "16zQqSip_8yjAG4UZmJuqUujHcLuckvhi"
+id_texts = "1RmKCSe0CtT3zIvhS9dWfqcFMD-56v7Dv"
 
 path_faiss = os.path.join(cartella, "prodotti_index.faiss")
 path_texts = os.path.join(cartella, "prodotti_texts.pkl")
 
-scarica_file(url_faiss, path_faiss)
-scarica_file(url_texts, path_texts)
+scarica_file_gdrive(id_faiss, path_faiss)
+scarica_file_gdrive(id_texts, path_texts)
 
 faiss_index = faiss.read_index(path_faiss)
 
@@ -68,6 +64,7 @@ def cerca_prodotti(query, k=3):
     risultati = [prodotti_texts[i] for i in I[0]]
     return risultati
 
+
 # -----------------------------
 # 4️⃣ Few-shot examples
 # -----------------------------
@@ -84,6 +81,7 @@ few_shot = [
     {"user": "Cerco cartucce per stampante", 
      "assistant": "Cartucce per stampante Navigator, confezione da 100 pezzi, Prezzo: 37.54€, provenienza Cina, codice 152MN"}
 ]
+
 
 # -----------------------------
 # 5️⃣ Streamlit UI

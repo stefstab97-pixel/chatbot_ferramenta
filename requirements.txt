@@ -9,6 +9,7 @@ faiss-cpu>=1.7.4
 openai>=1.12.0
 numpy>=1.24
 python-dotenv>=1.1.1
+gdown>=4.7.1
 
 
 
