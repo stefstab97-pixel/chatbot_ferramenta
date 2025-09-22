@@ -63,7 +63,7 @@ def cerca_prodotti(query, k=3):
     return risultati
 
 # -----------------------------
-# 4️⃣ Few-shot examples
+# 4️⃣ Few-shot examples di prodotto
 # -----------------------------
 few_shot = [
     {"user": "Ho bisogno di etichette adesive",
@@ -77,7 +77,19 @@ few_shot = [
 ]
 
 # -----------------------------
-# 5️⃣ Setup interfaccia e session state
+# 5️⃣ Few-shot consigli e suggerimenti d’uso
+# -----------------------------
+few_shot_consigli = [
+    {"user": "Dimmi come usare un evidenziatore",
+     "assistant": "L’evidenziatore Marca X è ideale per sottolineare testi importanti. Consigliamo di usare colori diversi per categorie di concetti."},
+    {"user": "Come si usano le etichette adesive?",
+     "assistant": "Le etichette adesive si applicano facilmente su superfici lisce. Ottime per organizzare documenti e scatole."},
+    {"user": "Indicazioni per usare cartucce per stampante",
+     "assistant": "Le cartucce vanno installate seguendo le istruzioni della stampante. Si consiglia di conservare una scorta per evitare interruzioni."},
+]
+
+# -----------------------------
+# 6️⃣ Setup interfaccia e session state
 # -----------------------------
 st.set_page_config(
     page_title="🛠️ Chatbot Ferramenta & Cancelleria",
@@ -91,23 +103,24 @@ Benvenuto! Scrivi la tua richiesta e ti suggerirò i prodotti più adatti.
 Puoi anche selezionare una **categoria** e una **fascia prezzo** per affinare i risultati.
 """)
 
-
-# Stati per chat e feedback (inizializza una volta)
+# Inizializza stati sessione
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "show_info" not in st.session_state:
     st.session_state.show_info = False
 if "last_feedback" not in st.session_state:
     st.session_state.last_feedback = None
+if "user_input" not in st.session_state:
+    st.session_state.user_input = ""
 
-# Filtri: NON assegnare a session_state qui
+# Filtri
 categoria = st.selectbox("Seleziona categoria:", ["Tutti", "Cancelleria", "Ferramenta", "Cartucce e Stampanti", "Altro"], key="categoria")
 fascia_prezzo = st.slider("Seleziona fascia prezzo (€):", 0, 1000, (0, 500), key="fascia_prezzo")
 
-# Input testuale con key
-user_input = st.text_area("Scrivi la tua richiesta:", height=70, key="user_input", placeholder="Scrivi qui... (Premi Invio per inviare)")
+# Input testo
+st.text_area("Scrivi la tua richiesta:", height=70, key="user_input", placeholder="Scrivi qui... (Premi Invio per inviare)")
 
-# Callback per esempi rapidi aggiorna la input text
+# Callback per esempi rapidi aggiorna l’input testo
 def set_user_input(value):
     st.session_state.user_input = value
 
@@ -116,7 +129,7 @@ with st.expander("Esempi rapidi"):
     for i, ex in enumerate(few_shot):
         cols[i].button(ex["user"], on_click=set_user_input, args=(ex["user"],))
 
-
+# Funzioni per gestione chat
 def add_message(role, message):
     st.session_state.chat_history.append({"role": role, "message": message})
 
@@ -131,7 +144,7 @@ def display_chat():
                 f"<div style='background-color:#F1F0F0; padding:10px; border-radius:10px; margin:10px 0; max-width:70%;'>🤖 {chat['message']}</div>",
                 unsafe_allow_html=True)
 
-
+# Funzione di ricerca con callback e output strutturato
 def cerca_e_resetta():
     query = st.session_state.user_input.strip()
     if not query:
@@ -145,8 +158,11 @@ def cerca_e_resetta():
         risultati = [r for r in risultati if categoria.lower() in r.lower()]
     risultati = [r for r in risultati if any(str(p) in r for p in range(fascia_prezzo[0], fascia_prezzo[1] + 1))]
 
+    # Prompt con both few shot di prodotto e consigli
     prompt = "Sei un assistente vendita di ferramenta e cancelleria. Rispondi consigliando il prodotto più adatto.\n"
     for ex in few_shot:
+        prompt += f"Utente: {ex['user']}\nAssistente: {ex['assistant']}\n"
+    for ex in few_shot_consigli:
         prompt += f"Utente: {ex['user']}\nAssistente: {ex['assistant']}\n"
     prompt += f"Utente: {query}\nAssistente:"
 
@@ -157,20 +173,24 @@ def cerca_e_resetta():
             temperature=0.3
         )
 
-    prodotti_msg = "\n".join([f"{i + 1}. {r}" for i, r in enumerate(risultati)]) if risultati else "Nessun prodotto trovato per la categoria e fascia prezzo selezionate."
+    # Suddivide la risposta AI in blocchi separati da doppia nuova linea
+    response_text = response.choices[0].message.content
+    blocchi = [blk.strip() for blk in response_text.split("\n\n") if blk.strip()]
 
-    add_message("assistant", f"Prodotti consigliati:\n{prodotti_msg}\n\nRisposta modello:\n{response.choices[0].message.content}")
+    # Aggiunge i blocchi come messaggi assistente (puoi anche mostrarli direttamente nella UI)
+    for idx, blocco in enumerate(blocchi, 1):
+        add_message("assistant", f"Proposta {idx}:\n{blocco}")
 
     st.session_state.show_info = False
     st.session_state.last_feedback = None
-    st.session_state.user_input = ""  # reset input sicuro dentro callback
+    st.session_state.user_input = ""  # reset input
 
 
 st.button("Cerca prodotto", on_click=cerca_e_resetta)
 
 display_chat()
 
-# Feedback risposta aiuto
+# Pulsanti feedback risposta assistente
 if st.session_state.chat_history and st.session_state.chat_history[-1]["role"] == "assistant":
     st.write("La risposta ti è stata utile?")
     col1, col2 = st.columns(2)
@@ -181,7 +201,7 @@ if st.session_state.chat_history and st.session_state.chat_history[-1]["role"] =
         st.session_state.last_feedback = False
         st.warning("Grazie per il feedback, lavoreremo per migliorare.")
 
-# Info aggiuntive
+# Pulsante info aggiuntive
 if st.button("Mostra informazioni aggiuntive"):
     st.session_state.show_info = True
 
