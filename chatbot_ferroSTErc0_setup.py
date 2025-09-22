@@ -91,42 +91,35 @@ Benvenuto! Scrivi la tua richiesta e ti suggerirò i prodotti più adatti.
 Puoi anche selezionare una **categoria** e una **fascia prezzo** per affinare i risultati.
 """)
 
-# Inizializza stati sessione
+
+# Stati per chat e feedback (inizializza una volta)
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "show_info" not in st.session_state:
     st.session_state.show_info = False
 if "last_feedback" not in st.session_state:
     st.session_state.last_feedback = None
-if "user_input" not in st.session_state:
-    st.session_state.user_input = ""
-if "categoria" not in st.session_state:
-    st.session_state.categoria = "Tutti"
-if "fascia_prezzo" not in st.session_state:
-    st.session_state.fascia_prezzo = (0, 500)
 
-# Filtri associati a session_state
-st.session_state.categoria = st.selectbox("Seleziona categoria:", ["Tutti", "Cancelleria", "Ferramenta", "Cartucce e Stampanti", "Altro"], key="categoria")
-st.session_state.fascia_prezzo = st.slider("Seleziona fascia prezzo (€):", 0, 1000, st.session_state.fascia_prezzo, key="fascia_prezzo")
+# Filtri: NON assegnare a session_state qui
+categoria = st.selectbox("Seleziona categoria:", ["Tutti", "Cancelleria", "Ferramenta", "Cartucce e Stampanti", "Altro"], key="categoria")
+fascia_prezzo = st.slider("Seleziona fascia prezzo (€):", 0, 1000, (0, 500), key="fascia_prezzo")
 
-# Input testo
-st.text_area("Scrivi la tua richiesta:", height=70, key="user_input", placeholder="Scrivi qui... (Premi Invio per inviare)")
+# Input testuale con key
+user_input = st.text_area("Scrivi la tua richiesta:", height=70, key="user_input", placeholder="Scrivi qui... (Premi Invio per inviare)")
 
-# Funzione gestione esempio rapido
+# Callback per esempi rapidi aggiorna la input text
 def set_user_input(value):
     st.session_state.user_input = value
 
-# Esempi rapidi senza rerun
 with st.expander("Esempi rapidi"):
     cols = st.columns(len(few_shot))
     for i, ex in enumerate(few_shot):
         cols[i].button(ex["user"], on_click=set_user_input, args=(ex["user"],))
 
-# Funzione per aggiungere messaggi chat
+
 def add_message(role, message):
     st.session_state.chat_history.append({"role": role, "message": message})
 
-# Funzione per visualizzare chat colorata
 def display_chat():
     for chat in st.session_state.chat_history:
         if chat["role"] == "user":
@@ -138,7 +131,7 @@ def display_chat():
                 f"<div style='background-color:#F1F0F0; padding:10px; border-radius:10px; margin:10px 0; max-width:70%;'>🤖 {chat['message']}</div>",
                 unsafe_allow_html=True)
 
-# Funzione ricerca e reset input chiamata dal bottone
+
 def cerca_e_resetta():
     query = st.session_state.user_input.strip()
     if not query:
@@ -148,9 +141,9 @@ def cerca_e_resetta():
 
     risultati = cerca_prodotti(query)
 
-    if st.session_state.categoria != "Tutti":
-        risultati = [r for r in risultati if st.session_state.categoria.lower() in r.lower()]
-    risultati = [r for r in risultati if any(str(p) in r for p in range(st.session_state.fascia_prezzo[0], st.session_state.fascia_prezzo[1] + 1))]
+    if categoria != "Tutti":
+        risultati = [r for r in risultati if categoria.lower() in r.lower()]
+    risultati = [r for r in risultati if any(str(p) in r for p in range(fascia_prezzo[0], fascia_prezzo[1] + 1))]
 
     prompt = "Sei un assistente vendita di ferramenta e cancelleria. Rispondi consigliando il prodotto più adatto.\n"
     for ex in few_shot:
@@ -170,17 +163,14 @@ def cerca_e_resetta():
 
     st.session_state.show_info = False
     st.session_state.last_feedback = None
+    st.session_state.user_input = ""  # reset input sicuro dentro callback
 
-    # Reset input in modo sicuro nella callback
-    st.session_state.user_input = ""
 
-# Bottone con callback
 st.button("Cerca prodotto", on_click=cerca_e_resetta)
 
-# Mostra la chat all’utente
 display_chat()
 
-# Pulsanti feedback risposta assistente
+# Feedback risposta aiuto
 if st.session_state.chat_history and st.session_state.chat_history[-1]["role"] == "assistant":
     st.write("La risposta ti è stata utile?")
     col1, col2 = st.columns(2)
@@ -191,11 +181,11 @@ if st.session_state.chat_history and st.session_state.chat_history[-1]["role"] =
         st.session_state.last_feedback = False
         st.warning("Grazie per il feedback, lavoreremo per migliorare.")
 
-# Pulsante info aggiuntive
+# Info aggiuntive
 if st.button("Mostra informazioni aggiuntive"):
     st.session_state.show_info = True
 
-if st.session_state.show_info and "chat_history" in st.session_state:
+if st.session_state.show_info:
     st.info("ℹ️ Qui puoi aggiungere dettagli come disponibilità in magazzino, alternative o specifiche tecniche.")
     if "ultimi_risultati" in st.session_state:
         for i, r in enumerate(st.session_state.ultimi_risultati, 1):
