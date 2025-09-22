@@ -9,16 +9,20 @@ from dotenv import load_dotenv
 # -----------------------------
 # 1️⃣ Carica API Key OpenAI
 # -----------------------------
-load_dotenv()
-api_key = os.environ.get("OPENAI_API_KEY")
+# Carica .env solo se presente (utile in locale)
+if os.path.exists(".env"):
+    load_dotenv()
+
+api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
-    raise ValueError("API Key non trovata! Inserisci OPENAI_API_KEY in .env")
+    raise ValueError("API Key non trovata! Imposta OPENAI_API_KEY nel file .env in locale o nelle Secrets su Streamlit Cloud")
+
 client = OpenAI(api_key=api_key)
 
 # -----------------------------
 # 2️⃣ Carica Vector Store FAISS e testi
 # -----------------------------
-cartella = "/workspaces/chatbot_ferramenta/vector_store"  # aggiorna il path corretto per Codespace
+cartella = "/workspaces/chatbot_ferramenta/vector_store"  # aggiorna il path corretto per Codespace/cloud
 faiss_index = faiss.read_index(os.path.join(cartella, "prodotti_index.faiss"))
 
 with open(os.path.join(cartella, "prodotti_texts.pkl"), "rb") as f:
