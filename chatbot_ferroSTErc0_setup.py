@@ -11,12 +11,14 @@ from dotenv import load_dotenv
 # -----------------------------
 load_dotenv()
 api_key = os.environ.get("OPENAI_API_KEY")
+if not api_key:
+    raise ValueError("API Key non trovata! Inserisci OPENAI_API_KEY in .env")
 client = OpenAI(api_key=api_key)
 
 # -----------------------------
 # 2️⃣ Carica Vector Store FAISS e testi
 # -----------------------------
-cartella = "C:/Users/stabl/OneDrive/Desktop/vector_store"
+cartella = "/workspaces/chatbot_ferramenta/vector_store"  # aggiorna il path corretto per Codespace
 faiss_index = faiss.read_index(os.path.join(cartella, "prodotti_index.faiss"))
 
 with open(os.path.join(cartella, "prodotti_texts.pkl"), "rb") as f:
@@ -52,7 +54,7 @@ few_shot = [
 ]
 
 # -----------------------------
-# 5️⃣ Streamlit UI migliorata
+# 5️⃣ Streamlit UI
 # -----------------------------
 st.set_page_config(
     page_title="🛠️ Chatbot Ferramenta & Cancelleria",
@@ -73,39 +75,34 @@ categoria = st.selectbox("Seleziona categoria:", categorie)
 # Input dell'utente
 user_input = st.text_input("Scrivi la tua richiesta:")
 
-# Pulsante invio
+# Stato per mostrare info aggiuntive (usiamo session_state per coerenza)
+if "show_info" not in st.session_state:
+    st.session_state.show_info = False
+
 if st.button("Cerca prodotto") and user_input:
     st.info("⏳ Sto cercando i prodotti più adatti...")
 
-    # -----------------------------
-    # 6️⃣ Ricerca prodotti
-    # -----------------------------
+    # Ricerca prodotti
     risultati = cerca_prodotti(user_input)
     
-    # Filtra in base alla categoria selezionata (semplice matching su testo)
+    # Filtro categoria
     if categoria != "Tutti":
         risultati = [r for r in risultati if categoria.lower() in r.lower()]
-    
-    # -----------------------------
-    # 7️⃣ Costruzione prompt few-shot
-    # -----------------------------
+
+    # Costruzione prompt few-shot
     prompt = "Sei un assistente vendita di ferramenta e cancelleria. Rispondi consigliando il prodotto più adatto.\n"
     for ex in few_shot:
         prompt += f"Utente: {ex['user']}\nAssistente: {ex['assistant']}\n"
     prompt += f"Utente: {user_input}\nAssistente:"
 
-    # -----------------------------
-    # 8️⃣ Chiamata modello OpenAI
-    # -----------------------------
+    # Chiamata modello OpenAI
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3
     )
 
-    # -----------------------------
-    # 9️⃣ Visualizzazione risultati UI/UX
-    # -----------------------------
+    # Visualizzazione risultati
     st.subheader("💡 Prodotti consigliati dal vector store:")
     if risultati:
         for i, r in enumerate(risultati, 1):
@@ -116,9 +113,14 @@ if st.button("Cerca prodotto") and user_input:
     st.subheader("📝 Risposta generata dal modello:")
     st.write(response.choices[0].message.content)
 
-    # Pulsante per info aggiuntive
-    if st.button("Mostra informazioni aggiuntive"):
-        st.info("ℹ️ Qui puoi aggiungere dettagli come disponibilità in magazzino, alternative o specifiche tecniche.")
-        # Esempio di informazioni aggiuntive
-        for i, r in enumerate(risultati, 1):
-            st.write(f"✅ {r} - Disponibilità: In stock, Sconto attuale: 5%")
+    # Memorizzo in session state i risultati per info aggiuntive
+    st.session_state.ultimi_risultati = risultati
+    st.session_state.show_info = False
+
+if st.button("Mostra informazioni aggiuntive"):
+    st.session_state.show_info = True
+
+if st.session_state.show_info and "ultimi_risultati" in st.session_state:
+    st.info("ℹ️ Qui puoi aggiungere dettagli come disponibilità in magazzino, alternative o specifiche tecniche.")
+    for i, r in enumerate(st.session_state.ultimi_risultati, 1):
+        st.write(f"✅ {r} - Disponibilità: In stock, Sconto attuale: 5%")
