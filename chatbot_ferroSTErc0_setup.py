@@ -5,27 +5,55 @@ import numpy as np
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
+import requests
+
+# -----------------------------
+# Funzione per scaricare file se manca
+# -----------------------------
+def scarica_file(url, percorso_locale):
+    if not os.path.exists(percorso_locale):
+        st.info(f"Scarico {percorso_locale} da {url}...")
+        response = requests.get(url)
+        if response.status_code == 200:
+            with open(percorso_locale, "wb") as f:
+                f.write(response.content)
+            st.success("Download completato.")
+        else:
+            st.error(f"Errore nel download: {response.status_code}")
+            st.stop()
 
 # -----------------------------
 # 1️⃣ Carica API Key OpenAI
 # -----------------------------
-# Carica .env solo se presente (utile in locale)
 if os.path.exists(".env"):
     load_dotenv()
 
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
-    raise ValueError("API Key non trovata! Imposta OPENAI_API_KEY nel file .env in locale o nelle Secrets su Streamlit Cloud")
+    raise ValueError("API Key non trovata! Imposta OPENAI_API_KEY nel file .env o nelle Secrets su Streamlit Cloud")
 
 client = OpenAI(api_key=api_key)
 
 # -----------------------------
-# 2️⃣ Carica Vector Store FAISS e testi
+# 2️⃣ Preparazione percorsi e download file se assenti
 # -----------------------------
-cartella = "/workspaces/chatbot_ferramenta/vector_store"  # aggiorna il path corretto per Codespace/cloud
-faiss_index = faiss.read_index(os.path.join(cartella, "prodotti_index.faiss"))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+cartella = os.path.join(BASE_DIR, "vector_store")
+os.makedirs(cartella, exist_ok=True)
 
-with open(os.path.join(cartella, "prodotti_texts.pkl"), "rb") as f:
+# Link diretti di download Google Drive
+url_faiss = "https://drive.google.com/uc?export=download&id=16zQqSip_8yjAG4UZmJuqUujHcLuckvhi"
+url_texts = "https://drive.google.com/uc?export=download&id=1RmKCSe0CtT3zIvhS9dWfqcFMD-56v7Dv"
+
+path_faiss = os.path.join(cartella, "prodotti_index.faiss")
+path_texts = os.path.join(cartella, "prodotti_texts.pkl")
+
+scarica_file(url_faiss, path_faiss)
+scarica_file(url_texts, path_texts)
+
+faiss_index = faiss.read_index(path_faiss)
+
+with open(path_texts, "rb") as f:
     prodotti_texts = pickle.load(f)
 
 # -----------------------------
@@ -72,41 +100,33 @@ Benvenuto! Scrivi la tua richiesta e ti suggerirò i prodotti più adatti.
 Puoi anche selezionare una **categoria** per affinare i risultati.
 """)
 
-# Selezione categoria
 categorie = ["Tutti", "Cancelleria", "Ferramenta", "Cartucce e Stampanti", "Altro"]
 categoria = st.selectbox("Seleziona categoria:", categorie)
 
-# Input dell'utente
 user_input = st.text_input("Scrivi la tua richiesta:")
 
-# Stato per mostrare info aggiuntive (usiamo session_state per coerenza)
 if "show_info" not in st.session_state:
     st.session_state.show_info = False
 
 if st.button("Cerca prodotto") and user_input:
     st.info("⏳ Sto cercando i prodotti più adatti...")
 
-    # Ricerca prodotti
     risultati = cerca_prodotti(user_input)
     
-    # Filtro categoria
     if categoria != "Tutti":
         risultati = [r for r in risultati if categoria.lower() in r.lower()]
 
-    # Costruzione prompt few-shot
     prompt = "Sei un assistente vendita di ferramenta e cancelleria. Rispondi consigliando il prodotto più adatto.\n"
     for ex in few_shot:
         prompt += f"Utente: {ex['user']}\nAssistente: {ex['assistant']}\n"
     prompt += f"Utente: {user_input}\nAssistente:"
 
-    # Chiamata modello OpenAI
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3
     )
 
-    # Visualizzazione risultati
     st.subheader("💡 Prodotti consigliati dal vector store:")
     if risultati:
         for i, r in enumerate(risultati, 1):
@@ -117,7 +137,6 @@ if st.button("Cerca prodotto") and user_input:
     st.subheader("📝 Risposta generata dal modello:")
     st.write(response.choices[0].message.content)
 
-    # Memorizzo in session state i risultati per info aggiuntive
     st.session_state.ultimi_risultati = risultati
     st.session_state.show_info = False
 
