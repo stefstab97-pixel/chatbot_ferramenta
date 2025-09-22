@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 import gdown
 
+
 # -----------------------------
 # Funzione per scaricare file da Google Drive usando gdown
 # -----------------------------
@@ -16,6 +17,7 @@ def scarica_file_gdrive(file_id, percorso_locale):
         st.info(f"Scarico {percorso_locale} da Google Drive...")
         gdown.download(url, percorso_locale, quiet=False)
         st.success("Download completato.")
+
 
 # -----------------------------
 # 1️⃣ Carica API Key OpenAI
@@ -28,6 +30,7 @@ if not api_key:
     raise ValueError("API Key non trovata! Imposta OPENAI_API_KEY nel file .env o nelle Secrets su Streamlit Cloud")
 
 client = OpenAI(api_key=api_key)
+
 
 # -----------------------------
 # 2️⃣ Preparazione percorsi e download file se assenti
@@ -50,6 +53,7 @@ faiss_index = faiss.read_index(path_faiss)
 with open(path_texts, "rb") as f:
     prodotti_texts = pickle.load(f)
 
+
 # -----------------------------
 # 3️⃣ Funzione di ricerca semantica
 # -----------------------------
@@ -62,22 +66,24 @@ def cerca_prodotti(query, k=3):
     risultati = [prodotti_texts[i] for i in I[0]]
     return risultati
 
+
 # -----------------------------
 # 4️⃣ Few-shot examples
 # -----------------------------
 few_shot = [
-    {"user": "Ho bisogno di etichette adesive", 
+    {"user": "Ho bisogno di etichette adesive",
      "assistant": "Etichette adesive Navigator, confezione da 25 pezzi, Prezzo: 27.71€, made in Spagna, codice 602EF"},
-    
-    {"user": "Mi serve un evidenziatore giallo", 
+
+    {"user": "Mi serve un evidenziatore giallo",
      "assistant": "Evidenziatore giallo Pilot, confezione da 50 pezzi, Prezzo: 19.35€, provenienza UK, codice 715EF"},
-    
-    {"user": "Vorrei dei gessetti colorati", 
+
+    {"user": "Vorrei dei gessetti colorati",
      "assistant": "Gessetti colorati Navigator, confezione da 20 pezzi, Prezzo: 617.00€, provenienza Germania, codice 204CD"},
-    
-    {"user": "Cerco cartucce per stampante", 
+
+    {"user": "Cerco cartucce per stampante",
      "assistant": "Cartucce per stampante Navigator, confezione da 100 pezzi, Prezzo: 37.54€, provenienza Cina, codice 152MN"}
 ]
+
 
 # -----------------------------
 # 5️⃣ Setup interfaccia e session state per storia e feedback
@@ -94,58 +100,74 @@ Benvenuto! Scrivi la tua richiesta e ti suggerirò i prodotti più adatti.
 Puoi anche selezionare una **categoria** e una **fascia prezzo** per affinare i risultati.
 """)
 
-# Stato mantenuto per storia chat e feedback
+
+# Stato mantenuto per storia chat e feedback e input utente
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "show_info" not in st.session_state:
     st.session_state.show_info = False
 if "last_feedback" not in st.session_state:
     st.session_state.last_feedback = None
+if "user_input" not in st.session_state:
+    st.session_state.user_input = ""
+
 
 # Filtri
 categorie = ["Tutti", "Cancelleria", "Ferramenta", "Cartucce e Stampanti", "Altro"]
 categoria = st.selectbox("Seleziona categoria:", categorie)
 fascia_prezzo = st.slider("Seleziona fascia prezzo (€):", 0, 1000, (0, 500))
 
-# Input multilinea con invio
-user_input = st.text_area("Scrivi la tua richiesta:", height=70, placeholder="Scrivi qui... (Premi Invio per inviare)")
 
-# Pulsanti esempi few-shot come scelta rapida
+# Input multilinea con key per session_state binding
+user_input = st.text_area("Scrivi la tua richiesta:", height=70, key="user_input", placeholder="Scrivi qui... (Premi Invio per inviare)")
+
+
+# Pulsanti esempi few-shot come scelta rapida senza rerun
 with st.expander("Esempi rapidi"):
     cols = st.columns(len(few_shot))
     for i, ex in enumerate(few_shot):
         if cols[i].button(ex["user"]):
-            user_input = ex["user"]
-            st.experimental_rerun()
+            st.session_state.user_input = ex["user"]
+
 
 # Funzione per aggiungere messaggio alla chat
 def add_message(role, message):
     st.session_state.chat_history.append({"role": role, "message": message})
 
-# Funzione per mostrare messaggi con stile diverso
+
+# Funzione per mostrare i messaggi con stile colorato e layout
 def display_chat():
     for chat in st.session_state.chat_history:
         if chat["role"] == "user":
-            st.markdown(f"<div style='background:#DCF8C6; padding:10px; border-radius:10px; margin:5px; max-width:70%; align-self:flex-end;'>{chat['message']}</div>", unsafe_allow_html=True)
+            st.markdown(f"""
+                <div style='background-color:#DCF8C6; padding:10px; border-radius:10px; margin:10px 0; max-width:70%; align-self:flex-end; font-weight:bold;'>
+                    🧑 {chat['message']}
+                </div>
+            """, unsafe_allow_html=True)
         else:
-            st.markdown(f"<div style='background:#F1F0F0; padding:10px; border-radius:10px; margin:5px; max-width:70%; align-self:flex-start;'>{chat['message']}</div>", unsafe_allow_html=True)
+            st.markdown(f"""
+                <div style='background-color:#F1F0F0; padding:10px; border-radius:10px; margin:10px 0; max-width:70%; align-self:flex-start;'>
+                    🤖 {chat['message']}
+                </div>
+            """, unsafe_allow_html=True)
 
-# Invia richiesta se tasto premuto
-if st.button("Cerca prodotto") and user_input.strip():
-    add_message("user", user_input.strip())
+
+# Invia richiesta se tasto premuto e input non vuoto
+if st.button("Cerca prodotto") and st.session_state.user_input.strip():
+    add_message("user", st.session_state.user_input.strip())
     st.info("⏳ Sto cercando i prodotti più adatti...")
 
-    risultati = cerca_prodotti(user_input.strip())
+    risultati = cerca_prodotti(st.session_state.user_input.strip())
 
-    # Filtro categoria e fascia prezzo (semplificato filtro prezzo testuale)
+    # Filtro categoria e fascia prezzo
     if categoria != "Tutti":
         risultati = [r for r in risultati if categoria.lower() in r.lower()]
-    risultati = [r for r in risultati if any(str(p) in r for p in range(fascia_prezzo[0], fascia_prezzo[1]+1))]
+    risultati = [r for r in risultati if any(str(p) in r for p in range(fascia_prezzo[0], fascia_prezzo[1] + 1))]
 
     prompt = "Sei un assistente vendita di ferramenta e cancelleria. Rispondi consigliando il prodotto più adatto.\n"
     for ex in few_shot:
         prompt += f"Utente: {ex['user']}\nAssistente: {ex['assistant']}\n"
-    prompt += f"Utente: {user_input.strip()}\nAssistente:"
+    prompt += f"Utente: {st.session_state.user_input.strip()}\nAssistente:"
 
     with st.spinner("Elaborazione del modello AI in corso..."):
         response = client.chat.completions.create(
@@ -154,19 +176,17 @@ if st.button("Cerca prodotto") and user_input.strip():
             temperature=0.3
         )
 
-    # Messaggi prodotti dal vector store
-    prodotti_msg = ""
-    if risultati:
-        prodotti_msg = "\n".join([f"{i+1}. {r}" for i, r in enumerate(risultati)])
-    else:
-        prodotti_msg = "Nessun prodotto trovato per la categoria e fascia prezzo selezionate."
+    prodotti_msg = "\n".join([f"{i + 1}. {r}" for i, r in enumerate(risultati)]) if risultati else "Nessun prodotto trovato per la categoria e fascia prezzo selezionate."
 
     add_message("assistant", f"Prodotti consigliati:\n{prodotti_msg}\n\nRisposta modello:\n{response.choices[0].message.content}")
     st.session_state.show_info = False
     st.session_state.last_feedback = None
+    st.session_state.user_input = ""  # reset input area
+
 
 # Mostra la chat
 display_chat()
+
 
 # Pulsanti feedback se l’ultimo messaggio è dell’assistente
 if st.session_state.chat_history and st.session_state.chat_history[-1]["role"] == "assistant":
@@ -178,6 +198,7 @@ if st.session_state.chat_history and st.session_state.chat_history[-1]["role"] =
     if col2.button("No"):
         st.session_state.last_feedback = False
         st.warning("Grazie per il feedback, lavoreremo per migliorare.")
+
 
 # Mostra informazioni aggiuntive opzionali
 if st.button("Mostra informazioni aggiuntive"):
