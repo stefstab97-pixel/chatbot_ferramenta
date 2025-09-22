@@ -6,3 +6,6 @@ __pycache__/
 *.faiss
 *.log
 .env
+#vector_store/
+#*.faiss
+
