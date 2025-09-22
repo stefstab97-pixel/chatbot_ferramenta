@@ -18,6 +18,22 @@ def scarica_file_gdrive(file_id, percorso_locale):
         st.success("Download completato.")
 
 # -----------------------------
+# Funzione per impostare background da Google Drive
+# -----------------------------
+def set_background_from_gdrive(file_id):
+    url = f"https://drive.google.com/uc?export=view&id={file_id}"
+    st.markdown(f"""
+        <style>
+        .stApp {{
+            background-image: url("{url}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }}
+        </style>
+        """, unsafe_allow_html=True)
+
+# -----------------------------
 # 1️⃣ Carica API Key OpenAI
 # -----------------------------
 if os.path.exists(".env"):
@@ -97,6 +113,9 @@ st.set_page_config(
     layout="wide"
 )
 
+# Impostazione background con la tua immagine Drive
+set_background_from_gdrive("1Y6tHszkZVtKNGwjLpt1346xBsO_0ET5i")
+
 st.title("🛠️ Chatbot Ferramenta & Cancelleria")
 st.markdown("""
 Benvenuto! Scrivi la tua richiesta e ti suggerirò i prodotti più adatti.
@@ -120,7 +139,7 @@ fascia_prezzo = st.slider("Seleziona fascia prezzo (€):", 0, 1000, (0, 500), k
 # Input testo
 st.text_area("Scrivi la tua richiesta:", height=70, key="user_input", placeholder="Scrivi qui... (Premi Invio per inviare)")
 
-# Callback per esempi rapidi aggiorna l’input testo
+# Callback per esempi rapidi aggiorna input testo
 def set_user_input(value):
     st.session_state.user_input = value
 
@@ -144,7 +163,6 @@ def display_chat():
                 f"<div style='background-color:#F1F0F0; padding:10px; border-radius:10px; margin:10px 0; max-width:70%;'>🤖 {chat['message']}</div>",
                 unsafe_allow_html=True)
 
-# Funzione di ricerca con callback e output strutturato
 def cerca_e_resetta():
     query = st.session_state.user_input.strip()
     if not query:
@@ -158,7 +176,7 @@ def cerca_e_resetta():
         risultati = [r for r in risultati if categoria.lower() in r.lower()]
     risultati = [r for r in risultati if any(str(p) in r for p in range(fascia_prezzo[0], fascia_prezzo[1] + 1))]
 
-    # Prompt con both few shot di prodotto e consigli
+    # Prompt con few shot di prodotto e consigli uso
     prompt = "Sei un assistente vendita di ferramenta e cancelleria. Rispondi consigliando il prodotto più adatto.\n"
     for ex in few_shot:
         prompt += f"Utente: {ex['user']}\nAssistente: {ex['assistant']}\n"
@@ -173,18 +191,15 @@ def cerca_e_resetta():
             temperature=0.3
         )
 
-    # Suddivide la risposta AI in blocchi separati da doppia nuova linea
     response_text = response.choices[0].message.content
     blocchi = [blk.strip() for blk in response_text.split("\n\n") if blk.strip()]
 
-    # Aggiunge i blocchi come messaggi assistente (puoi anche mostrarli direttamente nella UI)
     for idx, blocco in enumerate(blocchi, 1):
         add_message("assistant", f"Proposta {idx}:\n{blocco}")
 
     st.session_state.show_info = False
     st.session_state.last_feedback = None
     st.session_state.user_input = ""  # reset input
-
 
 st.button("Cerca prodotto", on_click=cerca_e_resetta)
 
