@@ -228,7 +228,7 @@ def cerca_e_resetta():
 
     st.session_state.show_info = False
     st.session_state.last_feedback = None
-    st.session_state.user_input = ""  # reset input
+    st.session_state.user_input = "" # reset input
 
 
 st.button("Cerca prodotto", on_click=cerca_e_resetta)
