@@ -6,6 +6,8 @@ from openai import OpenAI
 import os
 from dotenv import load_dotenv
 import gdown
+from streamlit_lottie import st_lottie
+import requests
 
 
 # -----------------------------
@@ -34,6 +36,13 @@ def set_background_from_gdrive(file_id):
         }}
         </style>
     """, unsafe_allow_html=True)
+
+
+def load_lottieurl(url):
+    r = requests.get(url)
+    if r.status_code != 200:
+        return None
+    return r.json()
 
 
 st.set_page_config(
@@ -192,14 +201,19 @@ def cerca_e_resetta():
     add_message("user", query)
     st.info("⏳ Sto cercando i prodotti più adatti...")
 
+    # Carica animazione Lottie durante il caricamento
+    lottie_url = "https://assets2.lottiefiles.com/packages/lf20_usmfx6bp.json"
+    lottie_json = load_lottieurl(lottie_url)
+    lottie_placeholder = st.empty()
+
+    if lottie_json:
+        lottie_placeholder.lottie(lottie_json, height=150)
 
     risultati = cerca_prodotti(query)
-
 
     if categoria != "Tutti":
         risultati = [r for r in risultati if categoria.lower() in r.lower()]
     risultati = [r for r in risultati if any(str(p) in r for p in range(fascia_prezzo[0], fascia_prezzo[1] + 1))]
-
 
     # Prompt con few shot di prodotto e consigli uso
     prompt = "Sei un assistente vendita di ferramenta e cancelleria. Rispondi consigliando il prodotto più adatto.\n"
@@ -209,7 +223,6 @@ def cerca_e_resetta():
         prompt += f"Utente: {ex['user']}\nAssistente: {ex['assistant']}\n"
     prompt += f"Utente: {query}\nAssistente:"
 
-
     with st.spinner("Elaborazione del modello AI in corso..."):
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -217,18 +230,18 @@ def cerca_e_resetta():
             temperature=0.3
         )
 
+    # Rimuovi animazione Lottie dopo ricezione risposta
+    lottie_placeholder.empty()
 
     response_text = response.choices[0].message.content
     blocchi = [blk.strip() for blk in response_text.split("\n\n") if blk.strip()]
 
-
     for idx, blocco in enumerate(blocchi, 1):
         add_message("assistant", f"Proposta {idx}:\n{blocco}")
 
-
     st.session_state.show_info = False
     st.session_state.last_feedback = None
-    st.session_state.user_input = "" # reset input
+    st.session_state.user_input = ""  # reset input
 
 
 st.button("Cerca prodotto", on_click=cerca_e_resetta)
