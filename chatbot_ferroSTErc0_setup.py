@@ -17,21 +17,25 @@ def scarica_file_gdrive(file_id, percorso_locale):
         gdown.download(url, percorso_locale, quiet=False)
         st.success("Download completato.")
 
-# -----------------------------
-# Funzione per impostare background da Google Drive
-# -----------------------------
 def set_background_from_gdrive(file_id):
     url = f"https://drive.google.com/uc?export=view&id={file_id}"
     st.markdown(f"""
         <style>
         .stApp {{
-            background-image: url("{url}");
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
+            background-image: url("{url}") !important;
+            background-size: cover !important;
+            background-position: center !important;
+            background-repeat: no-repeat !important;
         }}
         </style>
-        """, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+
+st.set_page_config(
+    page_title="🛠️ Chatbot Ferramenta & Cancelleria",
+    page_icon="🛒",
+    layout="wide"
+)
+set_background_from_gdrive("1Y6tHszkZVtKNGwjLpt1346xBsO_0ET5i")
 
 # -----------------------------
 # 1️⃣ Carica API Key OpenAI
